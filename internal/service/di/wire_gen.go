@@ -20,6 +20,8 @@ func SetupApplication() (Application, error) {
 	dataStore := infra.NewDataStore()
 	apiKeyGeneration := usecase.NewApiKeyGeneration(dataStore)
 	apiKeyGeneratorHandler := api.NewApiKeyGeneratorHandler(apiKeyGeneration)
-	application := NewApplication(context, apiKeyGeneratorHandler)
+	apiKeyValidation := usecase.NewApiKeyValidation(dataStore)
+	apiKeyValidationHandler := api.NewApiKeyValidationHandler(apiKeyValidation)
+	application := NewApplication(context, apiKeyGeneratorHandler, apiKeyValidationHandler)
 	return application, nil
 }

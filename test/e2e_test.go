@@ -74,5 +74,56 @@ func TestApiKeyManager(t *testing.T) {
 		}
 
 		t.Logf("Successfully generated API key with ID: %v", apiKeyResponse.ApiId)
+
+		// Test API key validation
+		t.Run("TestApiKeyValidation", func(t *testing.T) {
+			// Create a request to validate the API key
+			client := &http.Client{}
+			req, err := http.NewRequest("POST", "http://localhost:8080/keys/validate", nil)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+
+			// Add the API key to the Authorization header
+			// Note: In a real scenario, this would be the private key hex
+			// For now, we're using the returned key from generation
+			req.Header.Add("Authorization", "Bearer "+apiKeyResponse.ApiKey)
+
+			// Make the request
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("failed to make validation request: %v", err)
+			}
+			defer resp.Body.Close()
+
+			// Check response status
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("expected status OK, got %d: %s", resp.StatusCode, string(body))
+			}
+
+			// Read and validate response
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+
+			// Parse validation response
+			var validationResponse map[string]interface{}
+			if err := json.Unmarshal(body, &validationResponse); err != nil {
+				t.Fatalf("failed to unmarshal validation response: %v", err)
+			}
+
+			// Check validation response
+			if valid, ok := validationResponse["valid"].(bool); !ok || !valid {
+				t.Error("API key validation failed")
+			}
+
+			if validationResponse["api_id"] != apiKeyResponse.ApiId {
+				t.Errorf("API ID mismatch: got %v, want %v", validationResponse["api_id"], apiKeyResponse.ApiId)
+			}
+
+			t.Logf("Successfully validated API key with ID: %v", validationResponse["api_id"])
+		})
 	})
 }

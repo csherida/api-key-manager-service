@@ -10,7 +10,7 @@ type ApiKeyGenerator interface {
 }
 
 type ApiKeyValidator interface {
-	ValidateApiKey(ctx context.Context, apiId string, apiKey string) error
+	ValidateApiKey(ctx context.Context, privateKey string, ipAddress string) (*domain.ApiKey, error)
 }
 
 type ApiKeyManager interface {

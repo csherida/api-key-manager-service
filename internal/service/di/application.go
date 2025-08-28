@@ -17,22 +17,24 @@ import (
 const _serverPort = 8080
 
 type Application struct {
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	keyGeneratorHandler api.ApiKeyGeneratorHandlerType
-	repo                usecase.Repository
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	keyGeneratorHandler  api.ApiKeyGeneratorHandlerType
+	keyValidationHandler func(http.ResponseWriter, *http.Request)
+	repo                 usecase.Repository
 }
 
 func NewApplication(
 	ctx context.Context,
 	keyGeneratorHandler api.ApiKeyGeneratorHandler,
-
+	keyValidationHandler api.ApiKeyValidationHandler,
 ) Application {
 	appCtx, cancel := context.WithCancel(ctx)
 	app := Application{
-		ctx:                 appCtx,
-		cancel:              cancel,
-		keyGeneratorHandler: keyGeneratorHandler.ApiKeyGenerator,
+		ctx:                  appCtx,
+		cancel:               cancel,
+		keyGeneratorHandler:  keyGeneratorHandler.ApiKeyGenerator,
+		keyValidationHandler: keyValidationHandler.ValidateApiKey,
 	}
 	return app
 }
@@ -58,11 +60,12 @@ func (app *Application) Run() error {
 	///TODO: move implementation to infra folder and better server handling
 	router := mux.NewRouter()
 	router.HandleFunc("/keys", app.keyGeneratorHandler).Methods("POST")
-	router.HandleFunc("/keys/{keyId}", app.keyGeneratorHandler).Methods("DELETE")
+	//router.HandleFunc("/keys/{keyId}", app.keyGeneratorHandler).Methods("DELETE")
+	router.HandleFunc("/keys/validate", app.keyValidationHandler).Methods("POST")
 
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:" + strconv.Itoa(_serverPort)},
-		AllowedMethods:   []string{"POST", "PUT"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	})

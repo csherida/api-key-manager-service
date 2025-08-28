@@ -9,15 +9,17 @@ import (
 )
 
 type DataStore struct {
-	mu        sync.RWMutex
-	apiKeys   map[string]*domain.ApiKey
-	apiUsages map[string][]*domain.ApiUsage
+	mu              sync.RWMutex
+	apiKeys         map[string]*domain.ApiKey     // keyed by ApiId
+	apiKeysByPublic map[string]*domain.ApiKey     // keyed by public key (PrivateKey field)
+	apiUsages       map[string][]*domain.ApiUsage // keyed by ApiId
 }
 
 func NewDataStore() *DataStore {
 	return &DataStore{
-		apiKeys:   make(map[string]*domain.ApiKey),
-		apiUsages: make(map[string][]*domain.ApiUsage),
+		apiKeys:         make(map[string]*domain.ApiKey),
+		apiKeysByPublic: make(map[string]*domain.ApiKey),
+		apiUsages:       make(map[string][]*domain.ApiUsage),
 	}
 }
 
@@ -26,6 +28,10 @@ func (ds *DataStore) StoreApiKey(apiKey *domain.ApiKey) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.apiKeys[apiKey.ApiId] = apiKey
+	// Also store by public key for fast lookup
+	if apiKey.PrivateKey != "" {
+		ds.apiKeysByPublic[apiKey.PrivateKey] = apiKey
+	}
 	return nil
 }
 
@@ -35,6 +41,18 @@ func (ds *DataStore) GetApiKey(apiId string) (*domain.ApiKey, bool, error) {
 	defer ds.mu.RUnlock()
 	apiKey, exists := ds.apiKeys[apiId]
 	return apiKey, exists, nil
+}
+
+// GetApiKeyByPublicKey retrieves an API key by its public key (stored in PrivateKey field)
+func (ds *DataStore) GetApiKeyByPublicKey(publicKey string) (*domain.ApiKey, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	
+	apiKey, exists := ds.apiKeysByPublic[publicKey]
+	if !exists {
+		return nil, nil
+	}
+	return apiKey, nil
 }
 
 // GetAllActiveApiKeys returns all API keys that haven't expired yet or nil if none exist
@@ -63,7 +81,15 @@ func (ds *DataStore) GetAllActiveApiKeys() ([]*domain.ApiKey, error) {
 func (ds *DataStore) DeleteApiKey(apiId string) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	delete(ds.apiKeys, apiId)
+	
+	// Get the key first to find its public key
+	if apiKey, exists := ds.apiKeys[apiId]; exists {
+		delete(ds.apiKeys, apiId)
+		// Also delete from public key map
+		if apiKey.PrivateKey != "" {
+			delete(ds.apiKeysByPublic, apiKey.PrivateKey)
+		}
+	}
 	return nil
 }
 

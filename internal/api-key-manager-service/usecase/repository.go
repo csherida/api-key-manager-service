@@ -5,6 +5,7 @@ import "github.com/csherida/api-key-manager-service/internal/api-key-manager-ser
 type Repository interface {
 	StoreApiKey(apiKey *domain.ApiKey) error
 	GetApiKey(apiId string) (*domain.ApiKey, bool, error)
+	GetApiKeyByPublicKey(privateKey string) (*domain.ApiKey, error)
 	GetAllActiveApiKeys() ([]*domain.ApiKey, error)
 	DeleteApiKey(apiId string) error
 	StoreApiUsage(usage *domain.ApiUsage) error

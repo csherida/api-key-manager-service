@@ -9,4 +9,6 @@ import (
 var UseCaseProvider = wire.NewSet(
 	usecase.NewApiKeyGeneration,
 	wire.Bind(new(api.ApiKeyGenerator), new(usecase.ApiKeyGeneration)),
+	usecase.NewApiKeyValidation,
+	wire.Bind(new(api.ApiKeyValidator), new(usecase.ApiKeyValidation)),
 )
