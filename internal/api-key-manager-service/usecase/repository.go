@@ -9,6 +9,7 @@ type Repository interface {
 	StoreApiKey(apiKey *domain.ApiKey) error
 	GetApiKey(apiId string) (*domain.ApiKey, bool, error)
 	GetApiKeyByPublicKey(privateKey string) (*domain.ApiKey, error)
+	GetAllApiKeys() ([]*domain.ApiKey, error)
 	GetAllActiveApiKeys() ([]*domain.ApiKey, error)
 	DeleteApiKey(apiId string) error
 	ExpireApiKey(apiId string, expirationDate *time.Time) error

@@ -17,7 +17,6 @@ type ApiKeyDeleter interface {
 	ExpireApiKey(_ context.Context, apiId string) error
 }
 
-type ApiKeyManager interface {
-	GetAllApiKeyUsage(ctx context.Context) []domain.ApiKey
-	ExpireApiKey(ctx context.Context, apiId string) error
+type ApiKeyLister interface {
+	ListApiKeys(ctx context.Context) (*domain.ApiKeyListResponse, error)
 }

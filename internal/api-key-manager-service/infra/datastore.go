@@ -11,7 +11,7 @@ import (
 type DataStore struct {
 	mu              sync.RWMutex
 	apiKeys         map[string]*domain.ApiKey     // keyed by ApiId
-	apiKeysByPublic map[string]*domain.ApiKey     // keyed by public key (PrivateKey field)
+	apiKeysByPublic map[string]*domain.ApiKey     // keyed by public key
 	apiUsages       map[string][]*domain.ApiUsage // keyed by ApiId
 }
 
@@ -55,6 +55,19 @@ func (ds *DataStore) GetApiKeyByPublicKey(publicKey string) (*domain.ApiKey, err
 	return apiKey, nil
 }
 
+// GetAllApiKeys returns all API keys regardless of expiration status
+func (ds *DataStore) GetAllApiKeys() ([]*domain.ApiKey, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+
+	var allKeys []*domain.ApiKey
+	for _, apiKey := range ds.apiKeys {
+		allKeys = append(allKeys, apiKey)
+	}
+
+	return allKeys, nil
+}
+
 // GetAllActiveApiKeys returns all API keys that haven't expired yet or nil if none exist
 func (ds *DataStore) GetAllActiveApiKeys() ([]*domain.ApiKey, error) {
 	ds.mu.RLock()
@@ -65,7 +78,7 @@ func (ds *DataStore) GetAllActiveApiKeys() ([]*domain.ApiKey, error) {
 
 	for _, apiKey := range ds.apiKeys {
 		// Check if the key hasn't expired
-		if apiKey.ExpirationDate.After(now) {
+		if apiKey.ExpirationDate == nil || apiKey.ExpirationDate.After(now) {
 			activeKeys = append(activeKeys, apiKey)
 		}
 	}

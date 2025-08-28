@@ -22,6 +22,7 @@ type Application struct {
 	keyGeneratorHandler  api.ApiKeyGeneratorHandlerType
 	keyValidationHandler func(http.ResponseWriter, *http.Request)
 	keyDeletionHandler   func(http.ResponseWriter, *http.Request)
+	keyListHandler       func(http.ResponseWriter, *http.Request)
 	repo                 usecase.Repository
 }
 
@@ -30,6 +31,7 @@ func NewApplication(
 	keyGeneratorHandler api.ApiKeyGeneratorHandler,
 	keyValidationHandler api.ApiKeyValidationHandler,
 	keyDeletionHandler api.ApiKeyDeletionHandler,
+	keyListHandler api.ApiKeyListHandler,
 ) Application {
 	appCtx, cancel := context.WithCancel(ctx)
 	app := Application{
@@ -38,6 +40,7 @@ func NewApplication(
 		keyGeneratorHandler:  keyGeneratorHandler.ApiKeyGenerator,
 		keyValidationHandler: keyValidationHandler.ValidateApiKey,
 		keyDeletionHandler:   keyDeletionHandler.DeleteApiKey,
+		keyListHandler:       keyListHandler.ListApiKeys,
 	}
 	return app
 }
@@ -62,6 +65,7 @@ func NewContext() context.Context {
 func (app *Application) Run() error {
 	///TODO: move implementation to infra folder and better server handling
 	router := mux.NewRouter()
+	router.HandleFunc("/keys", app.keyListHandler).Methods("GET")
 	router.HandleFunc("/keys", app.keyGeneratorHandler).Methods("POST")
 	router.HandleFunc("/keys/{keyId}", app.keyDeletionHandler).Methods("DELETE")
 	router.HandleFunc("/keys/validate", app.keyValidationHandler).Methods("POST")

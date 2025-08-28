@@ -76,6 +76,88 @@ func TestApiKeyManager(t *testing.T) {
 
 		t.Logf("Successfully generated API key with ID: %v", apiKeyResponse.ApiId)
 
+		// Test API key listing
+		t.Run("TestApiKeyListing", func(t *testing.T) {
+			// Create a request to list all API keys
+			resp, err := http.Get("http://localhost:8080/keys")
+			if err != nil {
+				t.Fatalf("failed to make GET request: %v", err)
+			}
+			defer resp.Body.Close()
+			
+			// Check response status
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("expected status OK, got %d: %s", resp.StatusCode, string(body))
+			}
+			
+			// Read and validate response
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			
+			// Parse list response
+			var listResponse map[string]interface{}
+			if err := json.Unmarshal(body, &listResponse); err != nil {
+				t.Fatalf("failed to unmarshal list response: %v", err)
+			}
+			
+			// Check that we have the expected fields
+			if _, ok := listResponse["api_keys"]; !ok {
+				t.Error("response missing api_keys field")
+			}
+			if _, ok := listResponse["total"]; !ok {
+				t.Error("response missing total field")
+			}
+			
+			// Check that our created API key is in the list
+			apiKeys, ok := listResponse["api_keys"].([]interface{})
+			if !ok {
+				t.Fatal("api_keys is not an array")
+			}
+			
+			if len(apiKeys) == 0 {
+				t.Fatal("expected at least one API key in the list")
+			}
+			
+			// Find our API key in the list
+			found := false
+			for _, keyInterface := range apiKeys {
+				key := keyInterface.(map[string]interface{})
+				if key["api_id"] == apiKeyResponse.ApiId {
+					found = true
+					
+					// Verify fields are present and not exposing actual key values
+					if _, hasPrivateKey := key["private_key"]; hasPrivateKey {
+						t.Error("response should not contain private_key")
+					}
+					if _, hasPublicKey := key["public_key"]; hasPublicKey {
+						t.Error("response should not contain public_key")
+					}
+					
+					// Verify required metadata fields
+					if _, hasOrgName := key["organization_name"]; !hasOrgName {
+						t.Error("response missing organization_name field")
+					}
+					if _, hasUsageStats := key["usage_stats"]; !hasUsageStats {
+						t.Error("response missing usage_stats field")
+					}
+					if _, hasIsExpired := key["is_expired"]; !hasIsExpired {
+						t.Error("response missing is_expired field")
+					}
+					
+					break
+				}
+			}
+			
+			if !found {
+				t.Errorf("created API key with ID %s not found in list", apiKeyResponse.ApiId)
+			}
+			
+			t.Logf("Successfully listed API keys, found %d keys", len(apiKeys))
+		})
+
 		// Test API key validation
 		t.Run("TestApiKeyValidation", func(t *testing.T) {
 			// Create a request to validate the API key
