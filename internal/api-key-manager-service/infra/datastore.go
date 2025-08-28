@@ -90,22 +90,6 @@ func (ds *DataStore) GetAllActiveApiKeys() ([]*domain.ApiKey, error) {
 	return activeKeys, nil
 }
 
-// DeleteApiKey removes an API key from the store
-func (ds *DataStore) DeleteApiKey(apiId string) error {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-
-	// Get the key first to find its public key
-	if apiKey, exists := ds.apiKeys[apiId]; exists {
-		delete(ds.apiKeys, apiId)
-		// Also delete from public key map
-		if apiKey.PrivateKey != "" {
-			delete(ds.apiKeysByPublic, apiKey.PrivateKey)
-		}
-	}
-	return nil
-}
-
 // ExpireApiKey sets the expiration date of an API key to the specified time
 func (ds *DataStore) ExpireApiKey(apiId string, expirationDate *time.Time) error {
 	ds.mu.Lock()
@@ -140,42 +124,6 @@ func (ds *DataStore) StoreApiUsage(usage *domain.ApiUsage) error {
 
 	ds.apiUsages[usage.ApiId] = append(ds.apiUsages[usage.ApiId], usage)
 	return nil
-}
-
-// GetApiUsage retrieves all usage records for a specific API ID
-func (ds *DataStore) GetApiUsage(apiId string) ([]*domain.ApiUsage, error) {
-	ds.mu.RLock()
-	defer ds.mu.RUnlock()
-	usages, exists := ds.apiUsages[apiId]
-	if !exists {
-		return nil, nil
-	}
-
-	// Return a copy to prevent external modification
-	result := make([]*domain.ApiUsage, len(usages))
-	copy(result, usages)
-	return result, nil
-}
-
-// GetLatestApiUsage retrieves the most recent usage record for a specific API ID
-func (ds *DataStore) GetLatestApiUsage(apiId string) (*domain.ApiUsage, error) {
-	ds.mu.RLock()
-	defer ds.mu.RUnlock()
-
-	usages, exists := ds.apiUsages[apiId]
-	if !exists || len(usages) == 0 {
-		return nil, nil
-	}
-
-	// Find the most recent usage based on ValidatedAt
-	latest := usages[0]
-	for _, usage := range usages[1:] {
-		if usage.ValidatedAt.After(latest.ValidatedAt) {
-			latest = usage
-		}
-	}
-
-	return latest, nil
 }
 
 // GetAllApiUsages returns all API usage records
