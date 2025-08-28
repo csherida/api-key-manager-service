@@ -2,12 +2,11 @@ package usecase
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
+	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"github.com/csherida/api-key-manager-service/internal/api-key-manager-service/domain"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"log"
 )
@@ -27,7 +26,7 @@ func NewApiKeyGeneration(repo Repository) ApiKeyGeneration {
 
 func (a ApiKeyGeneration) GenerateApiKey(_ context.Context, organizationName string) (string, string, error) {
 	apiId := uuid.NewString()
-	keyPair, err := a.generateKeyPair()
+	keyPair, err := generateKeyPair()
 	if err != nil {
 		return "", "", err
 	}
@@ -45,37 +44,23 @@ func (a ApiKeyGeneration) GenerateApiKey(_ context.Context, organizationName str
 	return apiId, keyPair.PublicKey, nil
 }
 
-func (a ApiKeyGeneration) generateKeyPair() (*KeyPair, error) {
-	// Generate RSA key pair with 4096 bits
-	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+func generateKeyPair() (*KeyPair, error) {
+	privateKey, err := crypto.GenerateKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate RSA key pair: %w", err)
+		log.Printf("Failed to generate private key: %v\n", err)
+		return nil, err
 	}
 
-	// Encode private key to PKCS8 PEM format
-	privateKeyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal private key: %w", err)
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, errors.New("failed to cast public key to ECDSA")
 	}
 
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: privateKeyBytes,
-	})
-
-	// Encode public key to SPKI PEM format
-	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal public key: %w", err)
-	}
-
-	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: publicKeyBytes,
-	})
+	address := crypto.PubkeyToAddress(*publicKeyECDSA)
 
 	return &KeyPair{
-		PublicKey:  string(publicKeyPEM),
-		PrivateKey: string(privateKeyPEM),
+		PublicKey:  fmt.Sprintf("%x", crypto.FromECDSA(privateKey)),
+		PrivateKey: address.Hex(),
 	}, nil
 }
