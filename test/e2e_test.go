@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/csherida/api-key-manager-service/internal/api-key-manager-service/domain"
 	"github.com/csherida/api-key-manager-service/internal/service/di"
+	"github.com/stretchr/testify/require"
 	"io"
 	"log"
 	"net/http"
@@ -30,51 +31,17 @@ func TestApiKeyManager(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	t.Run("TestApiKeyGeneration", func(t *testing.T) {
-		// Create request payload
-		request := domain.ApiKeyGeneratorRequest{
-			OrganizationName: "TestOrganization",
-		}
+		apiKeyResponse := generateApiKey(t)
+		apiKeyResponse2 := generateApiKey(t)
+		require.NotEqual(t, apiKeyResponse.ApiKey, apiKeyResponse2.ApiKey)
+		apiKeyResponse3 := generateApiKey(t)
+		require.NotEqual(t, apiKeyResponse.ApiKey, apiKeyResponse3.ApiKey)
 
-		// Marshal request to JSON
-		jsonData, err := json.Marshal(request)
-		if err != nil {
-			t.Fatalf("failed to marshal request: %v", err)
+		responseMap := map[string]domain.ApiKeyGeneratorResponse{
+			apiKeyResponse.ApiId:  apiKeyResponse,
+			apiKeyResponse2.ApiId: apiKeyResponse2,
+			apiKeyResponse3.ApiId: apiKeyResponse3,
 		}
-
-		// Make POST request to generate API key
-		resp, err := http.Post("http://localhost:8080/keys", "application/json", bytes.NewBuffer(jsonData))
-		if err != nil {
-			t.Fatalf("failed to make POST request: %v", err)
-		}
-		defer resp.Body.Close()
-
-		// Check response status
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			t.Fatalf("expected status OK, got %d: %s", resp.StatusCode, string(body))
-		}
-
-		// Read and validate response
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("failed to read response body: %v", err)
-		}
-
-		// Parse response (expecting the API key response structure)
-		var apiKeyResponse domain.ApiKeyGeneratorResponse
-		if err := json.Unmarshal(body, &apiKeyResponse); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		// Validate response contains expected fields
-		if apiKeyResponse.ApiId == "" {
-			t.Error("response missing api_id field")
-		}
-		if apiKeyResponse.ApiKey == "" {
-			t.Error("response missing api_key field")
-		}
-
-		t.Logf("Successfully generated API key with ID: %v", apiKeyResponse.ApiId)
 
 		// Test API key listing
 		t.Run("TestApiKeyListing", func(t *testing.T) {
@@ -84,77 +51,68 @@ func TestApiKeyManager(t *testing.T) {
 				t.Fatalf("failed to make GET request: %v", err)
 			}
 			defer resp.Body.Close()
-			
+
 			// Check response status
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
 				t.Fatalf("expected status OK, got %d: %s", resp.StatusCode, string(body))
 			}
-			
+
 			// Read and validate response
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("failed to read response body: %v", err)
 			}
-			
+
 			// Parse list response
-			var listResponse map[string]interface{}
+			var listResponse domain.ApiKeyListResponse
 			if err := json.Unmarshal(body, &listResponse); err != nil {
 				t.Fatalf("failed to unmarshal list response: %v", err)
 			}
-			
-			// Check that we have the expected fields
-			if _, ok := listResponse["api_keys"]; !ok {
-				t.Error("response missing api_keys field")
+
+			require.Len(t, listResponse.ApiKeys, 3)
+			require.Greater(t, listResponse.Total, 0)
+			for _, apiKey := range listResponse.ApiKeys {
+				require.NotNil(t, responseMap[apiKey.ApiId])
+				require.NotEmpty(t, apiKey.OrganizationName)
+				require.NotEmpty(t, apiKey.UsageStats)
 			}
-			if _, ok := listResponse["total"]; !ok {
-				t.Error("response missing total field")
+
+			// Confirm no data leaked
+			var listResponseInterface map[string]interface{}
+			if err := json.Unmarshal(body, &listResponseInterface); err != nil {
+				t.Fatalf("failed to unmarshal list response: %v", err)
 			}
-			
+
 			// Check that our created API key is in the list
-			apiKeys, ok := listResponse["api_keys"].([]interface{})
+			apiKeys, ok := listResponseInterface["api_keys"].([]interface{})
 			if !ok {
 				t.Fatal("api_keys is not an array")
 			}
-			
-			if len(apiKeys) == 0 {
-				t.Fatal("expected at least one API key in the list")
-			}
-			
-			// Find our API key in the list
-			found := false
+
 			for _, keyInterface := range apiKeys {
 				key := keyInterface.(map[string]interface{})
-				if key["api_id"] == apiKeyResponse.ApiId {
-					found = true
-					
-					// Verify fields are present and not exposing actual key values
-					if _, hasPrivateKey := key["private_key"]; hasPrivateKey {
-						t.Error("response should not contain private_key")
-					}
-					if _, hasPublicKey := key["public_key"]; hasPublicKey {
-						t.Error("response should not contain public_key")
-					}
-					
-					// Verify required metadata fields
-					if _, hasOrgName := key["organization_name"]; !hasOrgName {
-						t.Error("response missing organization_name field")
-					}
-					if _, hasUsageStats := key["usage_stats"]; !hasUsageStats {
-						t.Error("response missing usage_stats field")
-					}
-					if _, hasIsExpired := key["is_expired"]; !hasIsExpired {
-						t.Error("response missing is_expired field")
-					}
-					
-					break
+
+				// Verify fields are present and not exposing actual key values
+				if _, hasPrivateKey := key["private_key"]; hasPrivateKey {
+					t.Error("response should not contain private_key")
+				}
+				if _, hasPublicKey := key["public_key"]; hasPublicKey {
+					t.Error("response should not contain public_key")
+				}
+
+				// Verify required metadata fields
+				if _, hasOrgName := key["organization_name"]; !hasOrgName {
+					t.Error("response missing organization_name field")
+				}
+				if _, hasUsageStats := key["usage_stats"]; !hasUsageStats {
+					t.Error("response missing usage_stats field")
+				}
+				if _, hasIsExpired := key["is_expired"]; !hasIsExpired {
+					t.Error("response missing is_expired field")
 				}
 			}
-			
-			if !found {
-				t.Errorf("created API key with ID %s not found in list", apiKeyResponse.ApiId)
-			}
-			
+
 			t.Logf("Successfully listed API keys, found %d keys", len(apiKeys))
 		})
 
@@ -272,6 +230,75 @@ func TestApiKeyManager(t *testing.T) {
 			if validateResp.StatusCode != http.StatusUnauthorized {
 				t.Errorf("expected validation to fail with unauthorized status after deletion, got %d", validateResp.StatusCode)
 			}
+
+			// Verify the key does not appear in GET /keys
+			resp, err = http.Get("http://localhost:8080/keys")
+			if err != nil {
+				t.Fatalf("failed to make GET request: %v", err)
+			}
+			defer resp.Body.Close()
+
+			// Check response status
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("expected status OK, got %d: %s", resp.StatusCode, string(body))
+			}
+
+			var listResponse domain.ApiKeyListResponse
+			require.NoError(t, json.Unmarshal(body, &listResponse))
+			for _, apiKey := range listResponse.ApiKeys {
+				require.Equal(t, apiKey.ApiId, apiKeyResponse.ApiId)
+			}
 		})
 	})
+}
+
+func generateApiKey(t *testing.T) domain.ApiKeyGeneratorResponse {
+	// Create request payload
+	request := domain.ApiKeyGeneratorRequest{
+		OrganizationName: "TestOrganization",
+	}
+
+	// Marshal request to JSON
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	// Make POST request to generate API key
+	resp, err := http.Post("http://localhost:8080/keys", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		t.Fatalf("failed to make POST request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected status OK, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read and validate response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	// Parse response (expecting the API key response structure)
+	var apiKeyResponse domain.ApiKeyGeneratorResponse
+	if err := json.Unmarshal(body, &apiKeyResponse); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// Validate response contains expected fields
+	if apiKeyResponse.ApiId == "" {
+		t.Error("response missing api_id field")
+	}
+	if apiKeyResponse.ApiKey == "" {
+		t.Error("response missing api_key field")
+	}
+
+	t.Logf("Successfully generated API key with ID: %v", apiKeyResponse.ApiId)
+
+	return apiKeyResponse
 }
