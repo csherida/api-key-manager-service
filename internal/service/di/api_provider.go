@@ -8,4 +8,5 @@ import (
 var ApiProvider = wire.NewSet(
 	api.NewApiKeyGeneratorHandler,
 	api.NewApiKeyValidationHandler,
+	api.NewApiKeyDeletionHandler,
 )

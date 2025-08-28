@@ -47,7 +47,7 @@ func (ds *DataStore) GetApiKey(apiId string) (*domain.ApiKey, bool, error) {
 func (ds *DataStore) GetApiKeyByPublicKey(publicKey string) (*domain.ApiKey, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	
+
 	apiKey, exists := ds.apiKeysByPublic[publicKey]
 	if !exists {
 		return nil, nil
@@ -81,7 +81,7 @@ func (ds *DataStore) GetAllActiveApiKeys() ([]*domain.ApiKey, error) {
 func (ds *DataStore) DeleteApiKey(apiId string) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	
+
 	// Get the key first to find its public key
 	if apiKey, exists := ds.apiKeys[apiId]; exists {
 		delete(ds.apiKeys, apiId)
@@ -90,6 +90,22 @@ func (ds *DataStore) DeleteApiKey(apiId string) error {
 			delete(ds.apiKeysByPublic, apiKey.PrivateKey)
 		}
 	}
+	return nil
+}
+
+// ExpireApiKey sets the expiration date of an API key to the specified time
+func (ds *DataStore) ExpireApiKey(apiId string, expirationDate *time.Time) error {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+
+	apiKey, exists := ds.apiKeys[apiId]
+	if !exists {
+		return nil // Key doesn't exist, nothing to expire
+	}
+
+	// Update the expiration date
+	apiKey.ExpirationDate = expirationDate
+
 	return nil
 }
 

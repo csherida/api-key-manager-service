@@ -22,6 +22,8 @@ func SetupApplication() (Application, error) {
 	apiKeyGeneratorHandler := api.NewApiKeyGeneratorHandler(apiKeyGeneration)
 	apiKeyValidation := usecase.NewApiKeyValidation(dataStore)
 	apiKeyValidationHandler := api.NewApiKeyValidationHandler(apiKeyValidation)
-	application := NewApplication(context, apiKeyGeneratorHandler, apiKeyValidationHandler)
+	apiKeyDeletion := usecase.NewApiKeyDeletion(dataStore)
+	apiKeyDeletionHandler := api.NewApiKeyDeletionHandler(apiKeyDeletion)
+	application := NewApplication(context, apiKeyGeneratorHandler, apiKeyValidationHandler, apiKeyDeletionHandler)
 	return application, nil
 }

@@ -11,4 +11,6 @@ var UseCaseProvider = wire.NewSet(
 	wire.Bind(new(api.ApiKeyGenerator), new(usecase.ApiKeyGeneration)),
 	usecase.NewApiKeyValidation,
 	wire.Bind(new(api.ApiKeyValidator), new(usecase.ApiKeyValidation)),
+	usecase.NewApiKeyDeletion,
+	wire.Bind(new(api.ApiKeyDeleter), new(usecase.ApiKeyDeletion)),
 )
